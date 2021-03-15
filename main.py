@@ -5,12 +5,20 @@ import pyautogui
 import numpy as np
 import math
 
+### Fixing the cutoff in the PyCharm Console
+import pandas as pd
+pd.set_option('display.width', 400)
+pd.set_option('display.max_columns', 10)
+np.set_printoptions(linewidth=400)
+###
+
 gridSize = 50
 cols = 21
 rows = 12
 targetColor = ((96, 34, 23))
 pyautogui.PAUSE = 0.1
-CARD_TYPES = ("Arsenal", "Cemetery", "Forest", "Grove", "Oblivion", "River", "Thicket", "Vampire", "Village")
+CARD_TYPES = ("Arsenal", "Cemetery", "Forest", "Grove", "Oblivion", "Outpost", "River", "Thicket", "Vampire", "Village")
+
 
 
 def find_hwnd():
@@ -29,12 +37,12 @@ def PrintState(mapGrid, hand):
             print (c,end = " ")
         print()
     print ()
-    print ("Hand::" + str(hand))
+    #print ("Hand::" + str(hand))
 
 def GetHand(region):
     hand = {}
     for cardType in CARD_TYPES:
-        allCards = pyautogui.locateAllOnScreen('%s.png' % cardType, region=region)
+        allCards = pyautogui.locateAllOnScreen('%s.png' % cardType, grayscale=True, region=region)
         for card in allCards:
             hand[card] = cardType
     handArray = []
@@ -71,40 +79,70 @@ def screenbitmap(hwnd, focus=False):
 def find_grid(data, search):
     index = np.where(data == search)
     try:
-        return (index[0][0], index[0][1])
+        return (index[0][0], index[1][0])
     except IndexError:
         raise IndexError
 
-def find_grid_old(data, search):
-    for i, e in enumerate(data):
-        try:
-            return i, e.index(search)
-        except ValueError:
-            pass
-    return False
-
 # Find next river tile
-def update_riverline(mapgrid):
-    for (x, row) in enumerate(mapgrid):
+def update_riverline_initial(mapgrid):
+    # Trees are placed upperleft-lowerright, so lets find the starting spot on the left
+    for (x, row) in enumerate(mapgrid.T):
         for (y, value) in enumerate(row):
             count = 0
             if value == "r":
-                if x > 0:
-                    if mapgrid[x-1][y] == "r":
-                        count = count + 1
-                if x < cols:
-                    if mapgrid[x+1][y] == "r":
-                        count = count + 1
                 if y > 0:
-                    if mapgrid[x][y-1] == "r":
+                    if mapgrid[y-1][x] == "r":
                         count = count + 1
-                if y > rows:
-                    if mapgrid[x][y+1] == "r":
+                if y < rows-1:
+                    if mapgrid[y+1][x] == "r":
                         count = count + 1
-            if count <= 1:
-                mapgrid[x][y] = "R"
-                return
+                if x > 0:
+                    if mapgrid[y][x-1] == "r":
+                        count = count + 1
+                if x < cols-1:
+                    if mapgrid[y][x+1] == "r":
+                        count = count + 1
+                if count <= 1:
+                    mapgrid[y][x] = "R"
+                    return mapgrid
+    return mapgrid
 
+def update_riverline(mapgrid):
+    for (y, row) in enumerate(mapgrid):
+        for (x, value) in enumerate(row):
+            count = 0
+            if value == "r":
+                if y > 0:
+                    if mapgrid[y-1][x] == "S":
+                        mapgrid[y][x] = "R"
+                        return mapgrid
+                if y < rows-1:
+                    if mapgrid[y+1][x] == "S":
+                        mapgrid[y][x] = "R"
+                        return mapgrid
+                if x > 0:
+                    if mapgrid[y][x-1] == "S":
+                        mapgrid[y][x] = "R"
+                        return mapgrid
+                if x < cols-1:
+                    if mapgrid[y][x+1] == "S":
+                        mapgrid[y][x] = "R"
+                        return mapgrid
+    return mapgrid
+
+def riverline_fullline(curdirection, location):
+    retArray = []
+    if curdirection == "U":
+        while location[0] > 0:
+            location = (location[0] - 1, location[1])
+            retArray.append(location)
+        curdirection = "D"
+    else:
+        while location[0] < 11:
+            location = (location[0] + 1, location[1])
+            retArray.append(location)
+        curdirection = "U"
+    return (retArray,curdirection, location)
 
 def riverline_helper(riverArray, direction, location):
     retArray = [location]
@@ -112,13 +150,14 @@ def riverline_helper(riverArray, direction, location):
     curDirection = direction
     while (20 >= newLocation[1] >= 0):
         if curDirection[1] == "U":
-            if riverArray[newLocation[1]][1] > 2:
+            if riverArray[newLocation[1]][1] == 12:
+                break
+            elif riverArray[newLocation[1]][1] > 2:
                 # Go up till location = riverarray-1
                 while (13 - newLocation[0]) < riverArray[newLocation[1]][1]:
                     newLocation = (newLocation[0] - 1, newLocation[1])
                     retArray.append(newLocation)
-            elif riverArray[newLocation[1]][1] == 12:
-                break
+
             if curDirection[0] == "L":
                 newLocation = (newLocation[0], newLocation[1] - 1)
             else:
@@ -141,16 +180,10 @@ def riverline_helper(riverArray, direction, location):
     # "Done"
     if curDirection[0] == "L":
         while newLocation[1] >= 0:
-            if curDirection[1] == "U":
-                while newLocation[0] > 0:
-                    newLocation = (newLocation[0]-1, newLocation[1])
-                    retArray.append(newLocation)
-                curDirection = (curDirection[0], "D")
-            else:
-                while newLocation[0] < 11:
-                    newLocation = (newLocation[0]+1, newLocation[1])
-                    retArray.append(newLocation)
-                curDirection = (curDirection[0], "U")
+            vals = riverline_fullline(curDirection[1], newLocation)
+            retArray = retArray + vals[0]
+            curDirection = (curDirection[0], vals[1])
+            newLocation = vals[2]
             if newLocation[1] >= 2:
                 newLocation = (newLocation[0], newLocation[1]-1)
                 retArray.append(newLocation)
@@ -158,19 +191,12 @@ def riverline_helper(riverArray, direction, location):
                 retArray.append(newLocation)
             else:
                 break
-
     else:
         while newLocation[1] <= 20:
-            if curDirection[1] == "U":
-                while newLocation[0] > 0:
-                    newLocation = (newLocation[0]-1, newLocation[1])
-                    retArray.append(newLocation)
-                curDirection = (curDirection[0], "D")
-            else:
-                while newLocation[0] < 11:
-                    newLocation = (newLocation[0]+1, newLocation[1])
-                    retArray.append(newLocation)
-                curDirection = (curDirection[0], "U")
+            vals = riverline_fullline(curDirection[1], newLocation)
+            retArray = retArray + vals[0]
+            curDirection = (curDirection[0], vals[1])
+            newLocation = vals[2]
             if newLocation[1] <= 18:
                 newLocation = (newLocation[0], newLocation[1]+1)
                 retArray.append(newLocation)
@@ -180,10 +206,10 @@ def riverline_helper(riverArray, direction, location):
                 break
     return retArray
 
-def riverline(gridMap):
+def riverline(gridmap):
     riverArray = []
     # Enumerate over Map vertically
-    for (x, row) in enumerate(gridMap.T):
+    for (x, row) in enumerate(gridmap.T):
         first = 0
         last = 0
         for (y, value) in enumerate(row):
@@ -197,43 +223,52 @@ def riverline(gridMap):
             else:
                 break
         riverArray.append((first, last))
-
-    lowtop = (99,-1)
-    lowbot = (99,-1)
+    lowtop = (99,-1,0)
+    lowbot = (99,-1,0)
     count = -1
-    for pair in riverArray:
+    for count, pair in enumerate(riverArray):
         count = count + 1
         if pair[0] < lowtop[0]:
-            lowtop = (pair[0], count)
+            lowtop = (pair[0], count, 0)
+        elif lowtop[0] == pair[0]:
+            lowtop = (lowtop[0], lowtop[1],lowtop[2]+1)
         if pair[1] < lowbot[0]:
-            lowbot = (pair[1], count)
+            lowbot = (pair[1], count,0)
+        elif lowbot[0] == pair[1]:
+            lowbot = (lowbot[0], lowbot[1],lowbot[2]+1)
+    if lowtop[0] == 0 and lowbot[0] == 0: # No river path
+        return False
 
     bot = False
     riverLine = []
-    if lowtop[0] == 0 and lowbot[0] == 0:
-        return False
     if lowtop[0] == lowbot[0]:
-        if lowbot[1] > lowtop[1]:
+        if lowbot[2] <= lowtop[2]:
             bot = True
+    elif lowtop[0] < lowbot[0]:
+        bot = True
+    elif lowtop[0] > lowbot[0]:
+        bot = False
 
-    if lowtop[0] < lowbot[0 or bot]:
+    if bot:
         # Cross Bottom
         line = riverline_helper(riverArray, ("L", "U"), (11, lowbot[1]))
         if line:
             riverLine = riverLine + line
             riverLine = riverLine + (riverline_helper(riverArray, ("R", "U"), (11, lowbot[1])))
         else:
+            print ("Riverline Failed (Bot)")
             return False
-    elif lowtop[0] > lowbot[0]:
+    else:
         # Cross Top
         line = riverline_helper(riverArray, ("L", "D"), (0, lowtop[1]))
         if line:
             riverLine = riverLine + line
             riverLine = riverLine + (riverline_helper(riverArray, ("R", "D"), (0, lowtop[1])))
         else:
+            print ("Riverline Failed (Top)")
             return False
     for coord in riverLine:
-        gridMap[coord[0]][coord[1]] = 'r'
+        gridmap[coord[0]][coord[1]] = 'r'
     return True
 
 
@@ -282,9 +317,22 @@ def read_map(img):
     success = riverline(mapGrid)
     if not success:
         return ([], False)
+    mapGrid = update_riverline_initial(mapGrid)
     print("Starting Map::")
     PrintState(mapGrid, [])
     return (mapGrid, True)
+
+def playCard(card, mapgrid, target, replace, BOARD_CORNER, CURSOR_CORNER):
+    try:
+        x,y = find_grid(mapgrid.T, target)
+    except IndexError:
+        print("Cannot place card")  # TODO: Figure out what to do here (update cardstoplay list?)
+        return mapgrid
+    click_card(card)
+    click(BOARD_CORNER[0] + 25 + (50 * x), BOARD_CORNER[1] + 25 + (50 * y))
+    mapgrid[y][x] = replace
+    pyautogui.moveTo(CURSOR_CORNER)
+    return mapgrid
 
 def main():
     hwnd = find_hwnd()
@@ -305,46 +353,46 @@ def main():
     (mapGrid, success) = read_map(img)
     if not success:
         raise Exception("No river line found") # if no line can go left-right just give up on run.
-    update_riverline(mapGrid)
     hand = []
     thickets = 0
     villages = 0
+    battled = True
     while (True):
-        cards = GetHand(HAND_REGION) # Can this run in a separate thread? : return list of new cards to play
-
         if (pyautogui.locateOnScreen("Paused.png", region=PAUSE_REGION)):
-            #rightclick(CURSOR_CORNER[0], CURSOR_CORNER[1])
+            rightclick(CURSOR_CORNER[0], CURSOR_CORNER[1])
             pass
-
         if (pyautogui.locateOnScreen("Battle.png", region=BATTLE_REGION)):
-            pass
+            battled = True
         else:
-            #if (len(cardsToPlay != 0)):
-            #    rightclick(CURSOR_CORNER[0], CURSOR_CORNER[1])
-            # Play cards if possible
-            for card in reversed(cards):
-                if card[1] == "Forest" or card[1] == "Thicket":
-                    try:
-                        x,y = find_grid(mapGrid, "0")
-                    except IndexError:
-                        print ("Cannot place card") # TODO: Figure out what to do here (update cardstoplay list?)
-                        continue
-                    click_card(card)
-                    click (BOARD_CORNER[0]+25+(50*x), BOARD_CORNER[1]+25+(50*y))
-                    mapGrid[x][y] = 'T'
-                    thickets = thickets + 1
-                    pyautogui.moveTo(CURSOR_CORNER)
-
-                if card[1] == "River":
-                    x,y = find_grid(mapGrid, "R")
-                    if x == False:
-                        print ("Cannot place card") # TODO: Figure out what to do here (update cardstoplay list?)
-                        continue
-                    click_card(card)
-                    click (BOARD_CORNER[0]+25+(50*x), BOARD_CORNER[1]+25+(50*y))
-                    mapGrid[x][y] = 'S'
-                    update_riverline(mapGrid)
-                    pyautogui.moveTo(CURSOR_CORNER)
+            if battled:
+                rightclick(CURSOR_CORNER[0], CURSOR_CORNER[1])
+                cards = GetHand(HAND_REGION)  # Can this run in a separate thread? : return list of new cards to play
+                # Play cards if possible
+                for card in reversed(cards):
+                    if card[1] == "Arsenal":
+                        mapGrid = playCard(card, mapGrid, "2", "A", BOARD_CORNER, CURSOR_CORNER)
+                    elif card[1] == "Cemetery":
+                        mapGrid = playCard(card, mapGrid, "1", "C", BOARD_CORNER, CURSOR_CORNER)
+                    elif card[1] == "Forest" or card[1] == "Thicket":
+                        mapGrid = playCard(card, mapGrid, "0", "T", BOARD_CORNER, CURSOR_CORNER)
+                        thickets = thickets + 1
+                    elif card[1] == "Grove":
+                        mapGrid = playCard(card, mapGrid, "1", "G", BOARD_CORNER, CURSOR_CORNER)
+                    elif card[1] == "Oblivion":
+                        pass
+                    elif card[1] == "Outpost":
+                        mapGrid = playCard(card, mapGrid, "2", "P", BOARD_CORNER, CURSOR_CORNER)
+                    elif card[1] == "River":
+                        mapGrid = playCard(card, mapGrid, "R", "S", BOARD_CORNER, CURSOR_CORNER)
+                        mapGrid = update_riverline(mapGrid)
+                    elif card[1] == "Vampire":
+                        mapGrid = playCard(card, mapGrid, "2", "V", BOARD_CORNER, CURSOR_CORNER)
+                    elif card[1] == "Village":
+                        mapGrid = playCard(card, mapGrid, "1", "v", BOARD_CORNER, CURSOR_CORNER)
+                        villages = villages + 1
+                battled = False
+                rightclick(CURSOR_CORNER[0], CURSOR_CORNER[1])
+                PrintState(mapGrid, [])
 
 
 if __name__ == "__main__":
