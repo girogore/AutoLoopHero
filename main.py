@@ -73,7 +73,7 @@ def screenbitmap(hwnd, focus=False):
     time.sleep(1)
     img = ImageGrab.grab(bbox)
     img = img.crop((8, 81, 8 + cols * gridSize, 81 + rows * gridSize + 70))
-    # img.save("Capture.png")
+    #img.save("Capture.png")
     return img
 
 def find_grid(data, search):
@@ -343,7 +343,7 @@ def main():
     topLeftX = region[0]
     topLeftY = region[1]
     GAME_REGION = (topLeftX, topLeftY, 1300, 750)
-    HAND_REGION = (topLeftX, topLeftY + 450, 1300, 300)
+    HAND_REGION = (topLeftX+12, topLeftY + 648, 1000, 5)
     PAUSE_REGION = (topLeftX + 370, topLeftY - 5, 75, 75)
     BATTLE_REGION = (topLeftX + 480, topLeftY + 90, 90, 90)
     CURSOR_CORNER = (topLeftX + 1200, topLeftY + 700)
@@ -359,8 +359,8 @@ def main():
     battled = True
     while (True):
         if (pyautogui.locateOnScreen("Paused.png", region=PAUSE_REGION)):
-            rightclick(CURSOR_CORNER[0], CURSOR_CORNER[1])
-            pass
+            #rightclick(CURSOR_CORNER[0], CURSOR_CORNER[1])
+            continue
         if (pyautogui.locateOnScreen("Battle.png", region=BATTLE_REGION)):
             battled = True
         else:
