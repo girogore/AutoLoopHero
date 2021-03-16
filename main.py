@@ -35,14 +35,15 @@ def find_hwnd():
     return lh[0]
 
 def SearchTile(x,y,img, color, rangex = 50, rangey = 50):
-    for pixelx in range(rangex):
-        for pixely in range(rangey):
+    #'Pixels' are 2x2 pixels wide
+    for pixelx in range(0,rangex,2):
+        for pixely in range(0,rangey,2):
             currentPixelColor = img.getpixel((x * gridSize + pixelx, y * gridSize + pixely))
             if (currentPixelColor == color):
                 return True
 
-def PrintState(mapGrid, hand):
-    for r in mapGrid:
+def PrintState(mapGrid, hand = ()):
+    for r in mapGrid.T:
         for c in r:
             print (c,end = " ")
         print()
@@ -96,47 +97,47 @@ def find_grid(data, search):
 # Find next river tile
 def update_riverline_initial(mapgrid):
     # Trees are placed upperleft-lowerright, so lets find the starting spot on the left
-    for (x, column) in enumerate(mapgrid.T):
-        for (y, value) in enumerate(column):
+    for (x, row) in enumerate(mapgrid):
+        for (y, value) in enumerate(row):
             count = 0
             if value == "r":
                 if y > 0:
-                    if mapgrid[y-1][x] == "r":
+                    if mapgrid[x][y-1] == "r":
                         count = count + 1
                 if y < rows-1:
-                    if mapgrid[y+1][x] == "r":
+                    if mapgrid[x][y+1] == "r":
                         count = count + 1
                 if x > 0:
-                    if mapgrid[y][x-1] == "r":
+                    if mapgrid[x-1][y] == "r":
                         count = count + 1
                 if x < cols-1:
-                    if mapgrid[y][x+1] == "r":
+                    if mapgrid[x+1][y] == "r":
                         count = count + 1
                 if count <= 1:
-                    mapgrid[y][x] = "R"
+                    mapgrid[x][y] = "R"
                     return mapgrid
     return mapgrid
 
 def update_riverline(mapgrid):
-    for (y, row) in enumerate(mapgrid):
-        for (x, value) in enumerate(row):
+    for (x, row) in enumerate(mapgrid):
+        for (y, value) in enumerate(row):
             count = 0
             if value == "r":
                 if y > 0:
-                    if mapgrid[y-1][x] == "S":
-                        mapgrid[y][x] = "R"
+                    if mapgrid[x][y-1] == "S":
+                        mapgrid[x][y] = "R"
                         return mapgrid
                 if y < rows-1:
-                    if mapgrid[y+1][x] == "S":
-                        mapgrid[y][x] = "R"
+                    if mapgrid[x][y+1] == "S":
+                        mapgrid[x][y] = "R"
                         return mapgrid
                 if x > 0:
-                    if mapgrid[y][x-1] == "S":
-                        mapgrid[y][x] = "R"
+                    if mapgrid[x-1][y] == "S":
+                        mapgrid[x][y] = "R"
                         return mapgrid
                 if x < cols-1:
-                    if mapgrid[y][x+1] == "S":
-                        mapgrid[y][x] = "R"
+                    if mapgrid[x+1][y] == "S":
+                        mapgrid[x][y] = "R"
                         return mapgrid
     return mapgrid
 
@@ -219,15 +220,15 @@ def riverline_helper(riverArray, direction, location):
 def riverline(gridmap):
     riverArray = []
     # Enumerate over Map vertically
-    for (y, row) in enumerate(gridmap.T):
+    for (x, column) in enumerate(gridmap):
         first = 0
         last = 0
-        for (x, value) in enumerate(row):
+        for (y, value) in enumerate(column):
             if value == '0':
                 first = first + 1
             else:
                 break
-        for (x, value) in enumerate(reversed(row)):
+        for (y, value) in enumerate(reversed(column)):
             if value == '0':
                 last = last + 1
             else:
@@ -278,17 +279,17 @@ def riverline(gridmap):
             print ("Riverline Failed (Top)")
             return False
     for coord in riverLine:
-        gridmap[coord[0]][coord[1]] = 'r'
+        gridmap[coord[1], coord[0]] = 'r'
     return True
 
 
 def read_map(img):
-    mapGrid = np.full((rows, cols), "0")
+    mapGrid = np.full((cols, rows), "0")
     whiteSquare = False
-    for (y, row) in enumerate(mapGrid):
-        for (x, value) in enumerate(row):
+    for (x, column) in enumerate(mapGrid):
+        for (y, value) in enumerate(column):
             if (y == 11):
-                mapGrid[y][x] = '0'
+                mapGrid[x][y] = '0'
                 break
             success = False
             for pixelx in range(50):
@@ -296,36 +297,36 @@ def read_map(img):
                     currentPixelColor = img.getpixel((x * gridSize + pixelx, y * gridSize + pixely))
                     if (currentPixelColor == pathColor):
                         #Path
-                        mapGrid[y][x] = '1'
+                        mapGrid[x][y] = '1'
                         success = True
                         if (whiteSquare):
                             break
                     if (currentPixelColor == (255, 255, 255)):
                         #Campsite
-                        mapGrid[y][x] = '9'
+                        mapGrid[x][y] = '9'
                         success = True
                         whiteSquare = True
                         break
                 if whiteSquare and success:
                     break
             if (not success):
-                mapGrid[y][x] = '0'
+                mapGrid[x][y] = '0'
 
-    for (y, row) in enumerate(mapGrid):
-        for (x, value) in enumerate(row):
-            if (mapGrid[y][x] == '0'):
+    for (x, column) in enumerate(mapGrid):
+        for (y, value) in enumerate(column):
+            if (mapGrid[x][y] == '0'):
                 if (y != 0):
-                    if (mapGrid[y - 1][x] == '1' or mapGrid[y - 1][x] == '9'):
-                        mapGrid[y][x] = '2'
-                if (y != 11):
-                    if (mapGrid[y + 1][x] == '1' or mapGrid[y + 1][x] == '9'):
-                        mapGrid[y][x] = '2'
+                    if (mapGrid[x][y - 1] == '1' or mapGrid[x][y - 1] == '9'):
+                        mapGrid[x][y] = '2'
+                if (y < rows-1):
+                    if (mapGrid[x][y + 1] == '1' or mapGrid[x][y + 1] == '9'):
+                        mapGrid[x][y] = '2'
                 if (x != 0):
-                    if (mapGrid[y][x - 1] == '1' or mapGrid[y][x - 1] == '9'):
-                        mapGrid[y][x] = '2'
-                if (x != 20):
-                    if (mapGrid[y][x + 1] == '1' or mapGrid[y][x + 1] == '9'):
-                        mapGrid[y][x] = '2'
+                    if (mapGrid[x - 1][y] == '1' or mapGrid[x - 1][y] == '9'):
+                        mapGrid[x][y] = '2'
+                if (x < cols-1):
+                    if (mapGrid[x + 1][y] == '1' or mapGrid[x + 1][y] == '9'):
+                        mapGrid[x][y] = '2'
     success = riverline(mapGrid)
     if not success:
         return ([], False)
@@ -336,13 +337,13 @@ def read_map(img):
 
 def playCard(card, mapgrid, target, replace, BOARD_CORNER, CURSOR_CORNER):
     try:
-        x,y = find_grid(mapgrid.T, target)
+        x,y = find_grid(mapgrid, target)
     except IndexError:
         #print("Cannot place card")  # TODO: Figure out what to do here (update cardstoplay list?)
         return (mapgrid, False)
     click_card(card)
     click(BOARD_CORNER[0] + 25 + (50 * x), BOARD_CORNER[1] + 25 + (50 * y))
-    mapgrid[y][x] = replace
+    mapgrid[x][y] = replace
     pyautogui.moveTo(CURSOR_CORNER)
     return (mapgrid, True)
 
@@ -355,38 +356,38 @@ def oblivion_card(card, mapgrid, BOARD_CORNER, CURSOR_CORNER):
         return mapgrid
 
 def findBandits(mapgrid, img):
-    for (y, row) in enumerate(mapgrid):
-        for (x, value) in enumerate(row):
+    for (x, column) in enumerate(mapgrid):
+        for (y, value) in enumerate(column):
             if value == "v":
                 if y > 0:
-                    if mapgrid[y-1][x] == "2":
+                    if mapgrid[x][y-1] == "2":
                         if SearchTile(x,y-1,img,banditColor,40,40):
-                            mapgrid[y-1][x] = "B"
+                            mapgrid[x][y-1] = "B"
                             return mapgrid
                 if y < rows-1:
-                    if mapgrid[y+1][x] == "2":
+                    if mapgrid[x][y+1] == "2":
                         if SearchTile(x, y+1,img,banditColor,40,40):
-                            mapgrid[y+1][x] = "B"
+                            mapgrid[x][y+1] = "B"
                             return mapgrid
                 if x > 0:
-                    if mapgrid[y][x-1] == "2":
+                    if mapgrid[x-1][y] == "2":
                         if SearchTile(x-1, y,img,banditColor,40,40):
-                            mapgrid[y][x-1] = "B"
+                            mapgrid[x-1][y] = "B"
                             return mapgrid
                 if x < cols-1:
-                    if mapgrid[y][x+1] == "2":
+                    if mapgrid[x+1][y] == "2":
                         if SearchTile(x+1, y,img,banditColor,40,40):
-                            mapgrid[y][x+1] = "B"
+                            mapgrid[x+1][y] = "B"
                             return mapgrid
     print ("FAILURE to find bandits")
     return mapgrid
 
 def findWoodTown(mapgrid, img):
-    for (y, row) in enumerate(mapgrid):
-        for (x, value) in enumerate(row):
+    for (x, column) in enumerate(mapgrid):
+        for (y, value) in enumerate(column):
             if value == "1":
                 if SearchTile(x, y, img, woodTownColor,40,40):
-                    mapgrid[y][x] = "W"
+                    mapgrid[x][y] = "W"
                     return mapgrid
     print ("FAILURE to find woodtown")
     return mapgrid
