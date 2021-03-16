@@ -15,7 +15,10 @@ np.set_printoptions(linewidth=400)
 gridSize = 50
 cols = 21
 rows = 12
-targetColor = ((96, 34, 23))
+pathColor = (96, 34, 23)
+woodTownColor = (98, 100, 57)
+banditColor = (175, 145, 86)
+
 pyautogui.PAUSE = 0.1
 CARD_TYPES = ("Arsenal", "Cemetery", "Forest", "Grove", "Oblivion", "Outpost", "River", "Thicket", "Vampire", "Village")
 
@@ -30,6 +33,13 @@ def find_hwnd():
     # just grab the hwnd for first window matching firefox
     lh = lh[0]
     return lh[0]
+
+def SearchTile(x,y,img, color, rangex = 50, rangey = 50):
+    for pixelx in range(rangex):
+        for pixely in range(rangey):
+            currentPixelColor = img.getpixel((x * gridSize + pixelx, y * gridSize + pixely))
+            if (currentPixelColor == color):
+                return True
 
 def PrintState(mapGrid, hand):
     for r in mapGrid:
@@ -86,8 +96,8 @@ def find_grid(data, search):
 # Find next river tile
 def update_riverline_initial(mapgrid):
     # Trees are placed upperleft-lowerright, so lets find the starting spot on the left
-    for (x, row) in enumerate(mapgrid.T):
-        for (y, value) in enumerate(row):
+    for (x, column) in enumerate(mapgrid.T):
+        for (y, value) in enumerate(column):
             count = 0
             if value == "r":
                 if y > 0:
@@ -209,15 +219,15 @@ def riverline_helper(riverArray, direction, location):
 def riverline(gridmap):
     riverArray = []
     # Enumerate over Map vertically
-    for (x, row) in enumerate(gridmap.T):
+    for (y, row) in enumerate(gridmap.T):
         first = 0
         last = 0
-        for (y, value) in enumerate(row):
+        for (x, value) in enumerate(row):
             if value == '0':
                 first = first + 1
             else:
                 break
-        for (y, value) in enumerate(reversed(row)):
+        for (x, value) in enumerate(reversed(row)):
             if value == '0':
                 last = last + 1
             else:
@@ -275,45 +285,47 @@ def riverline(gridmap):
 def read_map(img):
     mapGrid = np.full((rows, cols), "0")
     whiteSquare = False
-    for (x, row) in enumerate(mapGrid):
-        for (y, value) in enumerate(row):
-            if (x == 11):
-                mapGrid[x][y] = '0'
+    for (y, row) in enumerate(mapGrid):
+        for (x, value) in enumerate(row):
+            if (y == 11):
+                mapGrid[y][x] = '0'
                 break
             success = False
             for pixelx in range(50):
                 for pixely in range(50):
-                    currentPixelColor = img.getpixel((y * gridSize + pixely, x * gridSize + pixelx))
-                    if (currentPixelColor == targetColor):
-                        mapGrid[x][y] = '1'
+                    currentPixelColor = img.getpixel((x * gridSize + pixelx, y * gridSize + pixely))
+                    if (currentPixelColor == pathColor):
+                        #Path
+                        mapGrid[y][x] = '1'
                         success = True
                         if (whiteSquare):
                             break
                     if (currentPixelColor == (255, 255, 255)):
-                        mapGrid[x][y] = '9'
+                        #Campsite
+                        mapGrid[y][x] = '9'
                         success = True
                         whiteSquare = True
                         break
                 if whiteSquare and success:
                     break
             if (not success):
-                mapGrid[x][y] = '0'
+                mapGrid[y][x] = '0'
 
-    for (x, row) in enumerate(mapGrid):
-        for (y, value) in enumerate(row):
-            if (mapGrid[x][y] == '0'):
-                if (x != 0):
-                    if (mapGrid[x - 1][y] == '1' or mapGrid[x - 1][y] == '9'):
-                        mapGrid[x][y] = '2'
-                if (x != 11):
-                    if (mapGrid[x + 1][y] == '1' or mapGrid[x + 1][y] == '9'):
-                        mapGrid[x][y] = '2'
+    for (y, row) in enumerate(mapGrid):
+        for (x, value) in enumerate(row):
+            if (mapGrid[y][x] == '0'):
                 if (y != 0):
-                    if (mapGrid[x][y - 1] == '1' or mapGrid[x][y - 1] == '9'):
-                        mapGrid[x][y] = '2'
-                if (y != 20):
-                    if (mapGrid[x][y + 1] == '1' or mapGrid[x][y + 1] == '9'):
-                        mapGrid[x][y] = '2'
+                    if (mapGrid[y - 1][x] == '1' or mapGrid[y - 1][x] == '9'):
+                        mapGrid[y][x] = '2'
+                if (y != 11):
+                    if (mapGrid[y + 1][x] == '1' or mapGrid[y + 1][x] == '9'):
+                        mapGrid[y][x] = '2'
+                if (x != 0):
+                    if (mapGrid[y][x - 1] == '1' or mapGrid[y][x - 1] == '9'):
+                        mapGrid[y][x] = '2'
+                if (x != 20):
+                    if (mapGrid[y][x + 1] == '1' or mapGrid[y][x + 1] == '9'):
+                        mapGrid[y][x] = '2'
     success = riverline(mapGrid)
     if not success:
         return ([], False)
@@ -326,12 +338,57 @@ def playCard(card, mapgrid, target, replace, BOARD_CORNER, CURSOR_CORNER):
     try:
         x,y = find_grid(mapgrid.T, target)
     except IndexError:
-        print("Cannot place card")  # TODO: Figure out what to do here (update cardstoplay list?)
-        return mapgrid
+        #print("Cannot place card")  # TODO: Figure out what to do here (update cardstoplay list?)
+        return (mapgrid, False)
     click_card(card)
     click(BOARD_CORNER[0] + 25 + (50 * x), BOARD_CORNER[1] + 25 + (50 * y))
     mapgrid[y][x] = replace
     pyautogui.moveTo(CURSOR_CORNER)
+    return (mapgrid, True)
+
+def oblivion_card(card, mapgrid, BOARD_CORNER, CURSOR_CORNER):
+    (mapgrid, success) = playCard(card, mapgrid, "B", "2", BOARD_CORNER, CURSOR_CORNER)
+    if success:
+        return mapgrid
+    else:
+        (mapgrid, success) = playCard(card, mapgrid, "W", "1", BOARD_CORNER, CURSOR_CORNER)
+        return mapgrid
+
+def findBandits(mapgrid, img):
+    for (y, row) in enumerate(mapgrid):
+        for (x, value) in enumerate(row):
+            if value == "v":
+                if y > 0:
+                    if mapgrid[y-1][x] == "2":
+                        if SearchTile(x,y-1,img,banditColor,40,40):
+                            mapgrid[y-1][x] = "B"
+                            return mapgrid
+                if y < rows-1:
+                    if mapgrid[y+1][x] == "2":
+                        if SearchTile(x, y+1,img,banditColor,40,40):
+                            mapgrid[y+1][x] = "B"
+                            return mapgrid
+                if x > 0:
+                    if mapgrid[y][x-1] == "2":
+                        if SearchTile(x-1, y,img,banditColor,40,40):
+                            mapgrid[y][x-1] = "B"
+                            return mapgrid
+                if x < cols-1:
+                    if mapgrid[y][x+1] == "2":
+                        if SearchTile(x+1, y,img,banditColor,40,40):
+                            mapgrid[y][x+1] = "B"
+                            return mapgrid
+    print ("FAILURE to find bandits")
+    return mapgrid
+
+def findWoodTown(mapgrid, img):
+    for (y, row) in enumerate(mapgrid):
+        for (x, value) in enumerate(row):
+            if value == "1":
+                if SearchTile(x, y, img, woodTownColor,40,40):
+                    mapgrid[y][x] = "W"
+                    return mapgrid
+    print ("FAILURE to find woodtown")
     return mapgrid
 
 def main():
@@ -370,26 +427,54 @@ def main():
                 # Play cards if possible
                 for card in reversed(cards):
                     if card[1] == "Arsenal":
-                        mapGrid = playCard(card, mapGrid, "2", "A", BOARD_CORNER, CURSOR_CORNER)
+                        (mapGrid, success) = playCard(card, mapGrid, "2", "A", BOARD_CORNER, CURSOR_CORNER)
+                        if not success:
+                            print ("Failed to play Arsenal")
                     elif card[1] == "Cemetery":
-                        mapGrid = playCard(card, mapGrid, "1", "C", BOARD_CORNER, CURSOR_CORNER)
+                        (mapGrid, success) = playCard(card, mapGrid, "1", "C", BOARD_CORNER, CURSOR_CORNER)
+                        if not success:
+                            print ("Failed to play Cemetery")
                     elif card[1] == "Forest" or card[1] == "Thicket":
-                        mapGrid = playCard(card, mapGrid, "0", "T", BOARD_CORNER, CURSOR_CORNER)
-                        thickets = thickets + 1
+                        (mapGrid, success) = playCard(card, mapGrid, "0", "T", BOARD_CORNER, CURSOR_CORNER)
+                        if not success:
+                            print ("Failed to play Forest/Thicket")
+                        else:
+                            thickets = thickets + 1
+                            if thickets % 10 == 0:
+                                # Make sure it gets past the spawn animation
+                                time.sleep(0.5)
+                                mapGrid = findWoodTown(mapGrid, screenbitmap(hwnd))
                     elif card[1] == "Grove":
-                        mapGrid = playCard(card, mapGrid, "1", "G", BOARD_CORNER, CURSOR_CORNER)
+                        (mapGrid, success) = playCard(card, mapGrid, "1", "G", BOARD_CORNER, CURSOR_CORNER)
+                        if not success:
+                            print ("Failed to play Grove")
                     elif card[1] == "Oblivion":
-                        pass
+                        # Delete bandits and woodtowns
+                        mapGrid = oblivion_card(card, mapGrid, BOARD_CORNER, CURSOR_CORNER)
                     elif card[1] == "Outpost":
-                        mapGrid = playCard(card, mapGrid, "2", "P", BOARD_CORNER, CURSOR_CORNER)
+                        (mapGrid, success) = playCard(card, mapGrid, "2", "P", BOARD_CORNER, CURSOR_CORNER)
+                        if not success:
+                            print ("Failed to play Outpost")
                     elif card[1] == "River":
-                        mapGrid = playCard(card, mapGrid, "R", "S", BOARD_CORNER, CURSOR_CORNER)
-                        mapGrid = update_riverline(mapGrid)
+                        (mapGrid, success) = playCard(card, mapGrid, "R", "S", BOARD_CORNER, CURSOR_CORNER)
+                        if not success:
+                            print ("Failed to play River")
+                        else:
+                            mapGrid = update_riverline(mapGrid)
                     elif card[1] == "Vampire":
-                        mapGrid = playCard(card, mapGrid, "2", "V", BOARD_CORNER, CURSOR_CORNER)
+                        (mapGrid, success) = playCard(card, mapGrid, "2", "V", BOARD_CORNER, CURSOR_CORNER)
+                        if not success:
+                            print ("Failed to play Vampire Mansion")
                     elif card[1] == "Village":
-                        mapGrid = playCard(card, mapGrid, "1", "v", BOARD_CORNER, CURSOR_CORNER)
-                        villages = villages + 1
+                        (mapGrid, success) = playCard(card, mapGrid, "1", "v", BOARD_CORNER, CURSOR_CORNER)
+                        if not success:
+                            print ("Failed to play Village")
+                        else:
+                            villages = villages + 1
+                            if villages % 2 == 0:
+                                # Make sure it gets past the spawn animation
+                                time.sleep(0.5)
+                                mapGrid = findBandits(mapGrid, screenbitmap(hwnd))
                 battled = False
                 rightclick(CURSOR_CORNER[0], CURSOR_CORNER[1])
                 PrintState(mapGrid, [])
