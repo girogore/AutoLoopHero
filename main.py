@@ -1,3 +1,4 @@
+import threading
 from enum import Enum
 from PIL import ImageGrab, Image
 import win32gui
@@ -15,18 +16,19 @@ np.set_printoptions(linewidth=400)
 gridSize = 50
 cols = 21
 rows = 12
+hwnd = 0
+thickets = 0
+villages = 0
 pathColor = (96, 34, 23)
 woodTownColor = (98, 100, 57)
 banditColor = (175, 145, 86)
-MAP_REGION = (8, 81, 8 + cols * gridSize, 81 + rows * gridSize + 70)
-INVENTORY_TOPLEFTX = 1076
-INVENTORY_TOPLEFTY = 289
-INVENTORY_REGION = (INVENTORY_TOPLEFTX, INVENTORY_TOPLEFTY, INVENTORY_TOPLEFTX+200, INVENTORY_TOPLEFTY+148)
+inventory_slots = {}
+hand = {}
 
 pyautogui.PAUSE = 0.1
 CARD_TYPES = ("Arsenal", "Cemetery", "Forest", "Grove", "Oblivion", "Outpost", "River", "Thicket", "Vampire", "Village")
-AMULET_TYPES = 6
-ARMOR_TYPES = 9
+AMULET_TYPES = 8
+ARMOR_TYPES = 10
 BOOT_TYPES = 9
 WEAPON_TYPES = 10
 class ITEM_TYPES(Enum):
@@ -35,12 +37,25 @@ class ITEM_TYPES(Enum):
     Boot = 3
     Weapon = 4
 
+class regions():
+    INVENTORY_TOPLEFTX = 1076
+    INVENTORY_TOPLEFTY = 289
+    GAME_REGION = ()
+    HAND_REGION = ()
+    PAUSE_REGION = ()
+    BATTLE_REGION = ()
+    CURSOR_CORNER = ()
+    BOARD_CORNER = ()
+    INVENTORYSLOT_REGION = ()
+    MAP_REGION = (8, 81, 8 + cols * gridSize, 81 + rows * gridSize + 70)
+    INVENTORY_REGION = (INVENTORY_TOPLEFTX, INVENTORY_TOPLEFTY, INVENTORY_TOPLEFTX+200, INVENTORY_TOPLEFTY+148)
+
 def find_hwnd():
     toplist, winlist = [], []
-    def enum_cb(hwnd, results):
-        winlist.append((hwnd, win32gui.GetWindowText(hwnd)))
+    def enum_cb(_hwnd, results):
+        winlist.append((_hwnd, win32gui.GetWindowText(_hwnd)))
     win32gui.EnumWindows(enum_cb, toplist)
-    lh = [(hwnd, title) for hwnd, title in winlist if 'loop hero v1' in title.lower()]
+    lh = [(_hwnd, title) for _hwnd, title in winlist if 'loop hero v1' in title.lower()]
     # just grab the hwnd for first window matching loop hero
     lh = lh[0]
     return lh[0]
@@ -69,12 +84,24 @@ def print_state(mapGrid, hand = ()):
     print ()
     #print ("Hand::" + str(hand))
 
+def find_card(cardtype, region):
+    global hand
+    allCards = pyautogui.locateAllOnScreen('Tiles\%s.png' % cardtype, grayscale=True, region=region)
+    for card in allCards:
+        hand[card] = cardtype
+
 def get_hand(region):
+    global hand
     hand = {}
     for cardType in CARD_TYPES:
-        allCards = pyautogui.locateAllOnScreen('Tiles\%s.png' % cardType, grayscale=True, region=region)
-        for card in allCards:
-            hand[card] = cardType
+        t = threading.Thread(target=find_card, args=(cardType, region))
+        t.start()
+
+    main_thread = threading.currentThread()
+    for t in threading.enumerate():
+        if t is main_thread:
+            continue
+        t.join()
     handArray = []
     for card in hand:
         handArray.append((card, hand[card]))
@@ -96,7 +123,7 @@ def rightclick(region):
 def click_card(card):
     click((card[0][0] + (card[0][2] / 2), card[0][1] + (card[0][3] / 2)))
 
-def screenbitmap(hwnd, region, focus=False):
+def screenbitmap(region, focus=False):
     if (focus):
         win32gui.SetForegroundWindow(hwnd)
     bbox = win32gui.GetWindowRect(hwnd)
@@ -353,16 +380,16 @@ def read_map(img):
     print_state(mapGrid, [])
     return (mapGrid, True)
 
-def play_card(card, mapgrid, target, replace, BOARD_CORNER, CURSOR_CORNER):
+def play_card(card, mapgrid, target, replace):
     try:
         x,y = find_grid(mapgrid, target)
     except IndexError:
         #print("Cannot place card")  # TODO: Figure out what to do here (update cardstoplay list?)
         return (mapgrid, False)
     click_card(card)
-    click((BOARD_CORNER[0] + 25 + (50 * x), BOARD_CORNER[1] + 25 + (50 * y)))
+    click((regions.BOARD_CORNER[0] + 25 + (50 * x), regions.BOARD_CORNER[1] + 25 + (50 * y)))
     mapgrid[x][y] = replace
-    pyautogui.moveTo(CURSOR_CORNER)
+    pyautogui.moveTo(regions.CURSOR_CORNER)
     return (mapgrid, True)
 
 def find_bandits(mapgrid, img):
@@ -428,34 +455,48 @@ def locate_in_region(target, screen_region):
                     if match == 1: return (xstart, ystart)  # return top-left corner coordinates
     return None  # or this, if not found
 
-def get_item_type(x,y, hwnd):
-    region = tuple(map(lambda  i, j: i+j, INVENTORY_REGION, (x*50, y*50+21, 0, 0)))
+def get_item_type(x,y):
+    global inventory_slots
+    region = tuple(map(lambda  i, j: i+j, regions.INVENTORY_REGION, (x*50, y*50+21, 0, 0)))
     region = (region[0], region[1],region[0]+46,region[1]+3)
-    img = screenbitmap(hwnd, region).convert('RGBA')
+    img = screenbitmap(region).convert('RGBA')
     #Amulet
     for count in range(1,AMULET_TYPES+1):
         inv = locate_in_region(Image.open('Amulets\Amulet_%s.png' % count), img)
         if inv:
+            inventory_slots[(x,y)] = ITEM_TYPES.Amulet
             return ITEM_TYPES.Amulet
     for count in range(1, ARMOR_TYPES+1):
         inv = locate_in_region(Image.open('Armor\Armor_%s.png' % count), img)
         if inv:
+            inventory_slots[(x, y)] = ITEM_TYPES.Armor
             return ITEM_TYPES.Armor
     for count in range(1, BOOT_TYPES+1):
         inv = locate_in_region(Image.open('Boots\Boot_%s.png' % count), img)
         if inv:
+            inventory_slots[(x, y)] = ITEM_TYPES.Boot
             return ITEM_TYPES.Boot
     for count in range(1, WEAPON_TYPES+1):
         inv = locate_in_region(Image.open('Weapons\Weapon_%s.png' % count), img)
         if inv:
+            inventory_slots[(x, y)] = ITEM_TYPES.Weapon
             return ITEM_TYPES.Weapon
+    inventory_slots[(x, y)] = None
     return None
 
-def equip_items(itemslots, equipment_slots,hwnd, INVENTORYSLOT_REGION):
+def equip_items(itemslots, equipment_slots):
     for slot in itemslots:
-        region = (INVENTORYSLOT_REGION[0] + 50*slot[0]+25, INVENTORYSLOT_REGION[1] + 50*slot[1]+25)
-        itemtype = get_item_type(slot[0], slot[1], hwnd)
-        print(slot, itemtype)
+        t = threading.Thread(target=get_item_type, args=(slot[0], slot[1]))
+        t.start()
+    main_thread = threading.currentThread()
+
+    for t in threading.enumerate():
+        if t is main_thread:
+            continue
+        t.join()
+    for slot in itemslots:
+        region = (regions.INVENTORYSLOT_REGION[0] + 50*slot[0]+25, regions.INVENTORYSLOT_REGION[1] + 50*slot[1]+25)
+        itemtype = inventory_slots[slot]
         if itemtype:
             #TODO: Find Item Level
             if itemtype == ITEM_TYPES.Weapon:
@@ -479,84 +520,86 @@ def equip_items(itemslots, equipment_slots,hwnd, INVENTORYSLOT_REGION):
                 click(region)
                 click(equipment_slots[4][2])
                 equipment_slots[4][1] += 1
-    print(equipment_slots)
 
-def play_hand(mapgrid, hwnd,thickets, villages, HAND_REGION, BOARD_CORNER, CURSOR_CORNER):
-    cards = get_hand(HAND_REGION)  # Can this run in a separate thread? : return list of new cards to play
+def play_hand(mapgrid):
+    cards = get_hand(regions.HAND_REGION)  # Can this run in a separate thread? : return list of new cards to play
     # Play cards if possible
     for card in reversed(cards):
         if card[1] == "Arsenal":
-            (mapgrid, success) = play_card(card, mapgrid, "2", "A", BOARD_CORNER, CURSOR_CORNER)
+            (mapgrid, success) = play_card(card, mapgrid, "2", "A")
             if not success:
                 print("Failed to play Arsenal")
         elif card[1] == "Cemetery":
-            (mapgrid, success) = play_card(card, mapgrid, "1", "C", BOARD_CORNER, CURSOR_CORNER)
+            (mapgrid, success) = play_card(card, mapgrid, "1", "C")
             if not success:
                 print("Failed to play Cemetery")
         elif card[1] == "Forest" or card[1] == "Thicket":
-            (mapgrid, success) = play_card(card, mapgrid, "0", "T", BOARD_CORNER, CURSOR_CORNER)
+            (mapgrid, success) = play_card(card, mapgrid, "0", "T")
             if not success:
                 print("Failed to play Forest/Thicket")
             else:
-                thickets = thickets + 1
+                global thickets
+                thickets += 1
                 if thickets % 10 == 0:
                     # Make sure it gets past the spawn animation
                     time.sleep(0.5)
-                    mapgrid = find_woodtown(mapgrid, screenbitmap(hwnd, MAP_REGION))
+                    mapgrid = find_woodtown(mapgrid, screenbitmap(regions.MAP_REGION))
         elif card[1] == "Grove":
-            (mapgrid, success) = play_card(card, mapgrid, "1", "G", BOARD_CORNER, CURSOR_CORNER)
+            (mapgrid, success) = play_card(card, mapgrid, "1", "G")
             if not success:
                 print("Failed to play Grove")
         elif card[1] == "Oblivion":
             # Delete bandits and woodtowns
-            (mapgrid, success) = play_card(card, mapgrid, "B", "2", BOARD_CORNER, CURSOR_CORNER)
+            (mapgrid, success) = play_card(card, mapgrid, "B", "2")
             if success:
                 continue
             else:
-                (mapGrid, success) = play_card(card, mapgrid, "W", "1", BOARD_CORNER, CURSOR_CORNER)
+                (mapGrid, success) = play_card(card, mapgrid, "W", "1")
         elif card[1] == "Outpost":
-            (mapgrid, success) = play_card(card, mapgrid, "2", "P", BOARD_CORNER, CURSOR_CORNER)
+            (mapgrid, success) = play_card(card, mapgrid, "2", "P")
             if not success:
                 print("Failed to play Outpost")
         elif card[1] == "River":
-            (mapgrid, success) = play_card(card, mapgrid, "R", "S", BOARD_CORNER, CURSOR_CORNER)
+            (mapgrid, success) = play_card(card, mapgrid, "R", "S",)
             if not success:
                 print("Failed to play River")
             else:
                 mapgrid = update_riverline(mapgrid)
 
         elif card[1] == "Vampire":
-            (mapgrid, success) = play_card(card, mapgrid, "2", "V", BOARD_CORNER, CURSOR_CORNER)
+            (mapgrid, success) = play_card(card, mapgrid, "2", "V")
             if not success:
                 print("Failed to play Vampire Mansion")
         elif card[1] == "Village":
-            (mapgrid, success) = play_card(card, mapgrid, "1", "v", BOARD_CORNER, CURSOR_CORNER)
+            (mapgrid, success) = play_card(card, mapgrid, "1", "v")
             if not success:
                 print("Failed to play Village")
             else:
-                villages = villages + 1
+                global villages
+                villages += 1
                 if villages % 2 == 0:
                     # Make sure it gets past the spawn animation
                     time.sleep(0.5)
-                    mapgrid = find_bandits(mapgrid, screenbitmap(hwnd, MAP_REGION))
-    return (mapgrid, thickets, villages)
+                    mapgrid = find_bandits(mapgrid, screenbitmap(regions.MAP_REGION))
+    return (mapgrid)
 
 def main():
+    global hwnd
     hwnd = find_hwnd()
-    img = screenbitmap(hwnd,MAP_REGION, True)
+    img = screenbitmap(regions.MAP_REGION, True)
     region = pyautogui.locateOnScreen("sun.png") # How make sure it's not covered by mouse?
     if region is None:
         raise Exception('Could not find game on screen. Is the game visible?')
     topLeftX = region[0]
     topLeftY = region[1]
-    GAME_REGION = (topLeftX, topLeftY, 1300, 750)
-    HAND_REGION = (topLeftX+12, topLeftY + 648, 1000, 5)
-    PAUSE_REGION = (topLeftX + 370, topLeftY - 5, 75, 75)
-    BATTLE_REGION = (topLeftX + 480, topLeftY + 90, 90, 90)
-    CURSOR_CORNER = (topLeftX + 1200, topLeftY + 700)
-    BOARD_CORNER = (topLeftX - 2, topLeftY + 48)
-    INVENTORYSLOT_REGION = (topLeftX+1066, topLeftY+277, 50, 5)
-    pyautogui.moveTo(CURSOR_CORNER)
+    regions.GAME_REGION = (topLeftX, topLeftY, 1300, 750)
+    regions.HAND_REGION = (topLeftX+12, topLeftY + 648, 1000, 5)
+    regions.PAUSE_REGION = (topLeftX + 370, topLeftY - 5, 75, 75)
+    regions.BATTLE_REGION = (topLeftX + 480, topLeftY + 90, 90, 90)
+    regions.CURSOR_CORNER = (topLeftX + 1200, topLeftY + 700)
+    regions.BOARD_CORNER = (topLeftX - 2, topLeftY + 48)
+    regions.INVENTORYSLOT_REGION = (topLeftX+1066, topLeftY+277, 50, 5)
+    pyautogui.moveTo(regions.CURSOR_CORNER)
     equipment_slots=([ITEM_TYPES.Weapon,0, (topLeftX+1082, topLeftY+76)],
                      [ITEM_TYPES.Weapon,0, (topLeftX+1082, topLeftY+186)],
                      [ITEM_TYPES.Armor,0, (topLeftX+1137, topLeftY+186)],
@@ -566,16 +609,13 @@ def main():
     if not success:
         raise Exception("No river line found") # if no line can go left-right just give up on run.
     hand = []
-    thickets = 0
-    villages = 0
     battled = True
     while (True):
-        if (pyautogui.locateOnScreen("Paused.png", region=PAUSE_REGION)):
+        if (pyautogui.locateOnScreen("Paused.png", region=regions.PAUSE_REGION)):
             time.sleep(0.25)
-            img = screenbitmap(hwnd, INVENTORY_REGION)
+            img = screenbitmap(regions.INVENTORY_REGION)
             if battled:
-                (mapGrid, thickets, villages) = play_hand(mapGrid, hwnd, thickets, villages,
-                                                          HAND_REGION, BOARD_CORNER, CURSOR_CORNER)
+                mapGrid= play_hand(mapGrid)
                 battled = False
             invslots = []
             for x in range(4):
@@ -586,20 +626,18 @@ def main():
                         if search_inventory_tile(x, y, img):
                             invslots.append((x,y))
             # Sort it like a snake, thats the order items are shifted in the inventory
-            #[(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2), (3, 0), (3, 1)]
             invslots = sorted(invslots, key=lambda x: ((x[1],-x[0]) if x[1] == 1 else (x[1], x[0])), reverse=True)
-            equip_items(invslots,equipment_slots, hwnd, INVENTORYSLOT_REGION)
-            rightclick(CURSOR_CORNER)
+            equip_items(invslots,equipment_slots)
+            rightclick(regions.CURSOR_CORNER)
 
-        if (pyautogui.locateOnScreen("Battle.png", region=BATTLE_REGION)):
+        if (pyautogui.locateOnScreen("Battle.png", region=regions.BATTLE_REGION)):
             battled = True
         else:
             if battled:
-                rightclick(CURSOR_CORNER)
-                (mapGrid, thickets, villages) = play_hand(mapGrid, hwnd, thickets, villages,
-                                                          HAND_REGION, BOARD_CORNER, CURSOR_CORNER)
+                rightclick(regions.CURSOR_CORNER)
+                mapGrid = play_hand(mapGrid)
                 battled = False
-                rightclick(CURSOR_CORNER)
+                rightclick(regions.CURSOR_CORNER)
                 print_state(mapGrid)
 
 
