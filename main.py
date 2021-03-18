@@ -1,5 +1,6 @@
 import threading
 from enum import Enum
+
 from PIL import ImageGrab, Image
 import win32gui
 import time
@@ -27,7 +28,7 @@ hand = {}
 
 pyautogui.PAUSE = 0.1
 CARD_TYPES = ("Arsenal", "Cemetery", "Forest", "Grove", "Oblivion", "Outpost", "River", "Thicket", "Vampire", "Village")
-AMULET_TYPES = 8
+AMULET_TYPES = 9
 ARMOR_TYPES = 10
 BOOT_TYPES = 9
 WEAPON_TYPES = 10
@@ -76,13 +77,12 @@ def search_inventory_tile(x, y, img):
     return False
 
 
-def print_state(mapGrid, hand = ()):
+def print_state(mapGrid):
     for r in mapGrid.T:
         for c in r:
             print (c,end = " ")
         print()
     print ()
-    #print ("Hand::" + str(hand))
 
 def find_card(cardtype, region):
     global hand
@@ -105,7 +105,7 @@ def get_hand(region):
     handArray = []
     for card in hand:
         handArray.append((card, hand[card]))
-    return sorted(handArray, key=lambda t: t[0][0])
+    return sorted(handArray, key=lambda l: l[0][0])
 
 def click(region):
     pyautogui.moveTo(region[0], region[1])
@@ -166,7 +166,6 @@ def update_riverline_initial(mapgrid):
 def update_riverline(mapgrid):
     for (x, row) in enumerate(mapgrid):
         for (y, value) in enumerate(row):
-            count = 0
             if value == "r":
                 if y > 0:
                     if mapgrid[x][y-1] == "S":
@@ -281,9 +280,7 @@ def riverline(gridmap):
         riverArray.append((first, last))
     lowtop = (99,-1,0)
     lowbot = (99,-1,0)
-    count = -1
     for count, pair in enumerate(riverArray):
-        count = count + 1
         if pair[0] < lowtop[0]:
             lowtop = (pair[0], count, 0)
         elif lowtop[0] == pair[0]:
@@ -377,7 +374,7 @@ def read_map(img):
         return ([], False)
     mapGrid = update_riverline_initial(mapGrid)
     print("Starting Map::")
-    print_state(mapGrid, [])
+    print_state(mapGrid)
     return (mapGrid, True)
 
 def play_card(card, mapgrid, target, replace):
@@ -451,36 +448,47 @@ def locate_in_region(target, screen_region):
                             # check every pixel of the img
                             elif target.getpixel((x, y)) != screen_region.getpixel((xstart + x, ystart + y)):
                                 match = 0  # any difference - break
+                                print("***FAIL***")
                                 break
                     if match == 1: return (xstart, ystart)  # return top-left corner coordinates
     return None  # or this, if not found
 
 def get_item_type(x,y):
     global inventory_slots
-    region = tuple(map(lambda  i, j: i+j, regions.INVENTORY_REGION, (x*50, y*50+21, 0, 0)))
-    region = (region[0], region[1],region[0]+46,region[1]+3)
-    img = screenbitmap(region).convert('RGBA')
+    slot_region = tuple(map(lambda  i, j: i+j, regions.INVENTORY_REGION, (x*50, y*50, 0, 0)))
+    item_screen_region = (slot_region[0], slot_region[1]+21,slot_region[0]+46,slot_region[1]+21+3)
+    number_square_region = (slot_region[0]+2, slot_region[1]+51,18,1)
+    item_image = screenbitmap(item_screen_region).convert('RGBA')
+    item_level = 0
+    found_numbers = []
+    for number in range(0,10):
+        fn = pyautogui.locateAllOnScreen('Numbers\%s.png' % number, grayscale=True, region=number_square_region)
+        for num in fn:
+            found_numbers.append((num,number))
+    found_numbers = sorted(found_numbers, key=lambda num: num[0].left)
+    for (count, digit) in enumerate(found_numbers):
+        item_level += pow(10,len(found_numbers)-(count+1))*digit[1]
     #Amulet
     for count in range(1,AMULET_TYPES+1):
-        inv = locate_in_region(Image.open('Amulets\Amulet_%s.png' % count), img)
+        inv = locate_in_region(Image.open('Amulets\Amulet_%s.png' % count), item_image)
         if inv:
-            inventory_slots[(x,y)] = ITEM_TYPES.Amulet
-            return ITEM_TYPES.Amulet
+            inventory_slots[(x,y)] = (ITEM_TYPES.Amulet, item_level)
+            return (ITEM_TYPES.Amulet, item_level)
     for count in range(1, ARMOR_TYPES+1):
-        inv = locate_in_region(Image.open('Armor\Armor_%s.png' % count), img)
+        inv = locate_in_region(Image.open('Armor\Armor_%s.png' % count), item_image)
         if inv:
-            inventory_slots[(x, y)] = ITEM_TYPES.Armor
-            return ITEM_TYPES.Armor
+            inventory_slots[(x, y)] = (ITEM_TYPES.Armor, item_level)
+            return (ITEM_TYPES.Armor, item_level)
     for count in range(1, BOOT_TYPES+1):
-        inv = locate_in_region(Image.open('Boots\Boot_%s.png' % count), img)
+        inv = locate_in_region(Image.open('Boots\Boot_%s.png' % count), item_image)
         if inv:
-            inventory_slots[(x, y)] = ITEM_TYPES.Boot
-            return ITEM_TYPES.Boot
+            inventory_slots[(x, y)] = (ITEM_TYPES.Boot, item_level)
+            return (ITEM_TYPES.Boot, item_level)
     for count in range(1, WEAPON_TYPES+1):
-        inv = locate_in_region(Image.open('Weapons\Weapon_%s.png' % count), img)
+        inv = locate_in_region(Image.open('Weapons\Weapon_%s.png' % count), item_image)
         if inv:
-            inventory_slots[(x, y)] = ITEM_TYPES.Weapon
-            return ITEM_TYPES.Weapon
+            inventory_slots[(x, y)] = (ITEM_TYPES.Weapon, item_level)
+            return (ITEM_TYPES.Weapon, item_level)
     inventory_slots[(x, y)] = None
     return None
 
@@ -495,31 +503,38 @@ def equip_items(itemslots, equipment_slots):
             continue
         t.join()
     for slot in itemslots:
-        region = (regions.INVENTORYSLOT_REGION[0] + 50*slot[0]+25, regions.INVENTORYSLOT_REGION[1] + 50*slot[1]+25)
-        itemtype = inventory_slots[slot]
+        slot_center = (regions.INVENTORYSLOT_REGION[0] + 50*slot[0]+25, regions.INVENTORYSLOT_REGION[1] + 50*slot[1]+25)
+        if not (inventory_slots[slot]):
+            continue
+        itemtype = inventory_slots[slot][0]
         if itemtype:
-            #TODO: Find Item Level
+            itemlevel = inventory_slots[slot][1]
             if itemtype == ITEM_TYPES.Weapon:
                 if equipment_slots[0][1] < equipment_slots[1][1]:
-                    click(region)
-                    click(equipment_slots[0][2])
-                    equipment_slots[0][1] += 1
+                    if (itemlevel > equipment_slots[0][1]):
+                        click(slot_center)
+                        click(equipment_slots[0][2])
+                        equipment_slots[0][1] = itemlevel
                 else:
-                    click(region)
-                    click(equipment_slots[1][2])
-                    equipment_slots[1][1] += 1
+                    if (itemlevel > equipment_slots[1][1]):
+                        click(slot_center)
+                        click(equipment_slots[1][2])
+                        equipment_slots[1][1] = itemlevel
             elif itemtype == ITEM_TYPES.Armor:
-                click(region)
-                click(equipment_slots[2][2])
-                equipment_slots[2][1] += 1
+                if (itemlevel > equipment_slots[2][1]):
+                    click(slot_center)
+                    click(equipment_slots[2][2])
+                    equipment_slots[2][1] = itemlevel
             elif itemtype == ITEM_TYPES.Boot:
-                click(region)
-                click(equipment_slots[3][2])
-                equipment_slots[3][1] += 1
+                if (itemlevel > equipment_slots[3][1]):
+                    click(slot_center)
+                    click(equipment_slots[3][2])
+                    equipment_slots[3][1] = itemlevel
             elif itemtype == ITEM_TYPES.Amulet:
-                click(region)
-                click(equipment_slots[4][2])
-                equipment_slots[4][1] += 1
+                if (itemlevel > equipment_slots[4][1]):
+                    click(slot_center)
+                    click(equipment_slots[4][2])
+                    equipment_slots[4][1] = itemlevel
 
 def play_hand(mapgrid):
     cards = get_hand(regions.HAND_REGION)  # Can this run in a separate thread? : return list of new cards to play
@@ -554,7 +569,7 @@ def play_hand(mapgrid):
             if success:
                 continue
             else:
-                (mapGrid, success) = play_card(card, mapgrid, "W", "1")
+                (mapgrid, success) = play_card(card, mapgrid, "W", "1")
         elif card[1] == "Outpost":
             (mapgrid, success) = play_card(card, mapgrid, "2", "P")
             if not success:
@@ -565,7 +580,6 @@ def play_hand(mapgrid):
                 print("Failed to play River")
             else:
                 mapgrid = update_riverline(mapgrid)
-
         elif card[1] == "Vampire":
             (mapgrid, success) = play_card(card, mapgrid, "2", "V")
             if not success:
@@ -608,7 +622,6 @@ def main():
     (mapGrid, success) = read_map(img)
     if not success:
         raise Exception("No river line found") # if no line can go left-right just give up on run.
-    hand = []
     battled = True
     while (True):
         if (pyautogui.locateOnScreen("Paused.png", region=regions.PAUSE_REGION)):
@@ -626,7 +639,7 @@ def main():
                         if search_inventory_tile(x, y, img):
                             invslots.append((x,y))
             # Sort it like a snake, thats the order items are shifted in the inventory
-            invslots = sorted(invslots, key=lambda x: ((x[1],-x[0]) if x[1] == 1 else (x[1], x[0])), reverse=True)
+            invslots = sorted(invslots, key=lambda i: ((i[1],-i[0]) if i[1] == 1 else (i[1], i[0])), reverse=True)
             equip_items(invslots,equipment_slots)
             rightclick(regions.CURSOR_CORNER)
 
