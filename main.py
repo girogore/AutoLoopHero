@@ -41,20 +41,33 @@ class ITEM_TYPES(Enum):
 class regions():
     INVENTORY_TOPLEFTX = 1076
     INVENTORY_TOPLEFTY = 289
-    HAND_REGION = (12, 649,1000,2)
-    PAUSE_REGION = (370,-5,75,75)
-    BATTLE_REGION = (480,90,90,90)
-    CURSOR_CORNER = (1200, 700)
-    BOARD_CORNER = (-2, 48)
-    INVENTORYSLOT_REGION = (1066, 277,50,5)
-    STAY_RETREAT_CORNER = (300, 248,0,0)
-    MIDDLE_RETREAT = (212, 133, 1, 34)
-    LEFT_RETREAT = (103, 136, 1, 52)
-    STAY = (316, 136, 1, 52)
     MAP_REGION = (8, 81, 8 + cols * gridSize, 81 + rows * gridSize + 70)
     INVENTORY_REGION = (INVENTORY_TOPLEFTX, INVENTORY_TOPLEFTY, INVENTORY_TOPLEFTX+200, INVENTORY_TOPLEFTY+148)
-    CURSOR_LEVELUP = (964, 35)
-    CURSOR_TRAIT = (262, 103)
+
+    HAND_REGION = (12, 651,1000,2)
+    PAUSE_REGION = (387,0,50,50)
+    BATTLE_REGION = (498,112,55,55)
+    BOARD_CORNER = (0, 50)
+    INVENTORYSLOT_REGION = (1068, 279,50,5)
+    LEVELUP_REGION = (964, 16, 8, 1)
+    TEXTBOX_REGION = (703, 492, 1, 34)
+
+
+    STAY_RETREAT_CORNER = (302, 250,0,0)
+    MIDDLE_RETREAT = (212, 133, 1, 34)
+    LEFT_RETREAT = (103, 136, 1, 52)
+    STAY_REGION = (316, 136, 1, 52)
+    RESURRECT_REGION = (626, 388, 1, 34)
+
+    CURSOR_CORNER = (1158, 658)
+    CURSOR_LEVELUP = (953, 25)
+    CURSOR_TRAIT = (213, 155)
+    CURSOR_RETREAT = (1023, 683)
+    CURSOR_EXPEDITION = (1159, 62)
+    CURSOR_START = (522, 673)
+    CURSOR_REWARD = (484, 382)
+    CURSOR_MIDDLE_RETREAT = (224, 155)
+    CURSOR_RESURRECT = (331, 155)
 
 def find_hwnd():
     toplist, winlist = [], []
@@ -470,7 +483,7 @@ def get_item_type(x,y):
         fn = pyautogui.locateAllOnScreen('Numbers\%s.png' % number, grayscale=True, region=number_square_region)
         for num in fn:
             found_numbers.append((num,number))
-    found_numbers = sorted(found_numbers, key=lambda num: num[0].left)
+    found_numbers = sorted(found_numbers, key=lambda numb: numb[0].left)
     for (count, digit) in enumerate(found_numbers):
         item_level += pow(10,len(found_numbers)-(count+1))*digit[1]
     #Amulet
@@ -602,28 +615,47 @@ def play_hand(mapgrid):
                     mapgrid = find_bandits(mapgrid, screenbitmap(regions.MAP_REGION))
     return (mapgrid)
 
+def start_game():
+    click(regions.CURSOR_EXPEDITION)
+    click(regions.CURSOR_START)
+    time.sleep(1.5)
+    rightclick(regions.CURSOR_CORNER)
+    time.sleep(2)
+
 def main():
     global hwnd
     hwnd = find_hwnd()
-    img = screenbitmap(regions.MAP_REGION, True)
-    game_corner = pyautogui.locateOnScreen("Misc\sun.png") # How make sure it's not covered by mouse?
-    if game_corner is None:
+    #Box(left=1114, top=88, width=24, height=18)
+    #Box(left=7, top=34, width=18, height=18)
+    screenbitmap(regions.MAP_REGION, True)
+    expedition = pyautogui.locateOnScreen("Misc\Ex.png") # How make sure it's not covered by mouse?
+    if expedition is None:
         raise Exception('Could not find game on screen. Is the game visible?')
-    game_region = (game_corner[0], game_corner[1],0,0)
+    game_region = (expedition[0] - 1109, expedition[1] - 56,0,0)
+
     regions.HAND_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.HAND_REGION))
     regions.PAUSE_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.PAUSE_REGION))
     regions.BATTLE_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.BATTLE_REGION))
     regions.INVENTORYSLOT_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.INVENTORYSLOT_REGION))
+    regions.LEVELUP_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.LEVELUP_REGION))
+    regions.TEXTBOX_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.TEXTBOX_REGION))
 
+    regions.CURSOR_START = tuple(map(lambda i, j: i + j, game_region[:2], regions.CURSOR_START))
+    regions.CURSOR_RETREAT = tuple(map(lambda i, j: i + j, game_region[:2], regions.CURSOR_RETREAT))
+    regions.CURSOR_EXPEDITION = tuple(map(lambda i, j: i + j, game_region[:2], regions.CURSOR_EXPEDITION))
     regions.CURSOR_CORNER = tuple(map(lambda  i, j: i+j, game_region[:2], regions.CURSOR_CORNER))
     regions.CURSOR_TRAIT = tuple(map(lambda i, j: i + j, game_region[:2], regions.CURSOR_TRAIT))
     regions.BOARD_CORNER = tuple(map(lambda  i, j: i+j, game_region[:2], regions.BOARD_CORNER))
     regions.CURSOR_LEVELUP = tuple(map(lambda i, j: i + j, game_region[:2], regions.CURSOR_LEVELUP))
+    regions.CURSOR_REWARD = tuple(map(lambda i, j: i + j, game_region[:2], regions.CURSOR_REWARD))
 
     regions.STAY_RETREAT_CORNER = tuple(map(lambda  i, j: i+j, game_region, regions.STAY_RETREAT_CORNER))
     regions.MIDDLE_RETREAT = tuple(map(lambda  i, j: i+j, regions.STAY_RETREAT_CORNER, regions.MIDDLE_RETREAT))
     regions.LEFT_RETREAT  = tuple(map(lambda  i, j: i+j, regions.STAY_RETREAT_CORNER, regions.LEFT_RETREAT))
-    regions.STAY = tuple(map(lambda  i, j: i+j, regions.STAY_RETREAT_CORNER, regions.STAY))
+    regions.STAY_REGION = tuple(map(lambda i, j: i + j, regions.STAY_RETREAT_CORNER, regions.STAY_REGION))
+    regions.RESURRECT_REGION  = tuple(map(lambda i, j: i + j, regions.STAY_RETREAT_CORNER, regions.RESURRECT_REGION))
+    regions.CURSOR_RESURRECT = tuple(map(lambda i, j: i + j, regions.STAY_RETREAT_CORNER, regions.CURSOR_RESURRECT))
+    regions.CURSOR_MIDDLE_RETREAT = tuple(map(lambda i, j: i + j, regions.STAY_RETREAT_CORNER[:2], regions.CURSOR_MIDDLE_RETREAT))
 
     equipment_slots=([ITEM_TYPES.Weapon,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1082, 76)))],
                      [ITEM_TYPES.Weapon,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1082, 186)))],
@@ -631,40 +663,95 @@ def main():
                      [ITEM_TYPES.Boot,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1192, 186)))],
                      [ITEM_TYPES.Amulet,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1137, 131)))])
 
-    pyautogui.moveTo(regions.CURSOR_CORNER)
-    (mapGrid, success) = read_map(img)
-    if not success:
-        raise Exception("No river line found") # if no line can go left-right just give up on run.
-    battled = True
+    mapGrid = ()
     while (True):
-        if (pyautogui.locateOnScreen("Misc\Paused.png", region=regions.PAUSE_REGION)):
-            time.sleep(0.25)
-            img = screenbitmap(regions.INVENTORY_REGION)
-            if battled:
-                mapGrid= play_hand(mapGrid)
-                battled = False
-            invslots = []
-            for x in range(4):
-                for y in range(3):
-                    if x == 3 and y == 2:
-                        pass
-                    else:
-                        if search_inventory_tile(x, y, img):
-                            invslots.append((x,y))
-            # Sort it like a snake, thats the order items are shifted in the inventory
-            invslots = sorted(invslots, key=lambda i: ((i[1],-i[0]) if i[1] == 1 else (i[1], i[0])), reverse=True)
-            equip_items(invslots,equipment_slots)
-            rightclick(regions.CURSOR_CORNER)
+        success = False
+        while (not success):
+            start_game()
+            img = screenbitmap(regions.MAP_REGION, True)
+            (mapGrid, success) = read_map(img)
+            if not success:
+                click(regions.CURSOR_RETREAT)
+                time.sleep(2)
+                ret = pyautogui.locateOnScreen("Misc\Left_Retreat.png", region=regions.LEFT_RETREAT)
+                click(ret)
+                time.sleep(2)
+        battled = True
+        game_running = True
+        while (game_running):
+            if (pyautogui.locateOnScreen("Misc\Paused.png", region=regions.PAUSE_REGION)):
+                time.sleep(0.25)
+                img = screenbitmap(regions.INVENTORY_REGION)
+                if battled:
+                    mapGrid= play_hand(mapGrid)
+                    battled = False
+                invslots = []
+                for x in range(4):
+                    for y in range(3):
+                        if x == 3 and y == 2:
+                            pass
+                        else:
+                            if search_inventory_tile(x, y, img):
+                                invslots.append((x,y))
+                # Sort it like a snake, thats the order items are shifted in the inventory
+                invslots = sorted(invslots, key=lambda i: ((i[1],-i[0]) if i[1] == 1 else (i[1], i[0])), reverse=True)
+                equip_items(invslots,equipment_slots)
+                rightclick(regions.CURSOR_CORNER)
 
-        if (pyautogui.locateOnScreen("Misc\Battle.png", region=regions.BATTLE_REGION)):
-            battled = True
-        else:
-            if battled:
-                rightclick(regions.CURSOR_CORNER)
-                mapGrid = play_hand(mapGrid)
-                battled = False
-                rightclick(regions.CURSOR_CORNER)
-                print_state(mapGrid)
+            if (pyautogui.locateOnScreen("Misc\Battle.png", region=regions.BATTLE_REGION)):
+                battled = True
+            else:
+                if battled:
+                    rightclick(regions.CURSOR_CORNER)
+
+                    #Just taking the topmost trait
+                    if (pyautogui.locateOnScreen("Misc\Levelup.png", region=regions.LEVELUP_REGION)):
+                        click(regions.CURSOR_LEVELUP)
+                        click(regions.CURSOR_TRAIT)
+                        time.sleep(0.5)
+                        click(regions.CURSOR_TRAIT)
+
+                    mapGrid = play_hand(mapGrid)
+                    battled = False
+                    rightclick(regions.CURSOR_CORNER)
+                    print_state(mapGrid)
+
+            #Boss Fight
+            boss = pyautogui.locateOnScreen("Misc\Stay.png", region=regions.STAY_REGION)
+            if (boss):
+                click(boss)
+                time.sleep(1)
+                #Textbox entry
+                for j in range(5):
+                    click(regions.CURSOR_CORNER)
+                    time.sleep(0.5)
+                while (True):
+                    if (pyautogui.locateOnScreen("Misc\Textbox.png", region=regions.TEXTBOX_REGION)):
+                        #Textbox Outro
+                        time.sleep(1)
+                        for j in range(5):
+                            click(regions.CURSOR_CORNER)
+                            time.sleep(0.5)
+                        time.sleep(1)
+                        click(regions.CURSOR_REWARD)
+                        time.sleep(0.5)
+                        ret = pyautogui.locateOnScreen("Misc\Left_Retreat.png", region=regions.LEFT_RETREAT)
+                        click(ret)
+                        time.sleep(2)
+                        game_running = False
+                        break
+
+                #Defeat
+            if (pyautogui.locateOnScreen("Misc\Middle_Retreat.png", region=regions.MIDDLE_RETREAT)):
+                game_running = False
+                click(regions.CURSOR_MIDDLE_RETREAT)
+                time.sleep(2)
+
+            if (pyautogui.locateOnScreen("Misc\Resurrect.png", region=regions.RESURRECT_REGION)):
+                click(regions.CURSOR_RESURRECT)
+
+
+
 
 
 if __name__ == "__main__":
