@@ -28,9 +28,9 @@ hand = {}
 
 pyautogui.PAUSE = 0.1
 CARD_TYPES = ("Arsenal", "Cemetery", "Forest", "Grove", "Oblivion", "Outpost", "River", "Thicket", "Vampire", "Village")
-AMULET_TYPES = 9
+AMULET_TYPES = 10
 ARMOR_TYPES = 10
-BOOT_TYPES = 9
+BOOT_TYPES = 10
 WEAPON_TYPES = 10
 class ITEM_TYPES(Enum):
     Amulet = 1
@@ -41,15 +41,20 @@ class ITEM_TYPES(Enum):
 class regions():
     INVENTORY_TOPLEFTX = 1076
     INVENTORY_TOPLEFTY = 289
-    GAME_REGION = ()
-    HAND_REGION = ()
-    PAUSE_REGION = ()
-    BATTLE_REGION = ()
-    CURSOR_CORNER = ()
-    BOARD_CORNER = ()
-    INVENTORYSLOT_REGION = ()
+    HAND_REGION = (12, 649,1000,2)
+    PAUSE_REGION = (370,-5,75,75)
+    BATTLE_REGION = (480,90,90,90)
+    CURSOR_CORNER = (1200, 700)
+    BOARD_CORNER = (-2, 48)
+    INVENTORYSLOT_REGION = (1066, 277,50,5)
+    STAY_RETREAT_CORNER = (300, 248,0,0)
+    MIDDLE_RETREAT = (212, 133, 1, 34)
+    LEFT_RETREAT = (103, 136, 1, 52)
+    STAY = (316, 136, 1, 52)
     MAP_REGION = (8, 81, 8 + cols * gridSize, 81 + rows * gridSize + 70)
     INVENTORY_REGION = (INVENTORY_TOPLEFTX, INVENTORY_TOPLEFTY, INVENTORY_TOPLEFTX+200, INVENTORY_TOPLEFTY+148)
+    CURSOR_LEVELUP = (964, 35)
+    CURSOR_TRAIT = (262, 103)
 
 def find_hwnd():
     toplist, winlist = [], []
@@ -448,7 +453,6 @@ def locate_in_region(target, screen_region):
                             # check every pixel of the img
                             elif target.getpixel((x, y)) != screen_region.getpixel((xstart + x, ystart + y)):
                                 match = 0  # any difference - break
-                                print("***FAIL***")
                                 break
                     if match == 1: return (xstart, ystart)  # return top-left corner coordinates
     return None  # or this, if not found
@@ -456,9 +460,10 @@ def locate_in_region(target, screen_region):
 def get_item_type(x,y):
     global inventory_slots
     slot_region = tuple(map(lambda  i, j: i+j, regions.INVENTORY_REGION, (x*50, y*50, 0, 0)))
-    item_screen_region = (slot_region[0], slot_region[1]+21,slot_region[0]+46,slot_region[1]+21+3)
-    number_square_region = (slot_region[0]+2, slot_region[1]+51,18,1)
+    item_screen_region = (slot_region[0], slot_region[1]+21,slot_region[0]+46,slot_region[1]+21+2)
+    number_square_region = (regions.INVENTORYSLOT_REGION[0]+(50*x),regions.INVENTORYSLOT_REGION[1]+(50*y)+18, 18, 1)
     item_image = screenbitmap(item_screen_region).convert('RGBA')
+    #item_image.save("Capture%s.png" % x)
     item_level = 0
     found_numbers = []
     for number in range(0,10):
@@ -471,22 +476,22 @@ def get_item_type(x,y):
     #Amulet
     for count in range(1,AMULET_TYPES+1):
         inv = locate_in_region(Image.open('Amulets\Amulet_%s.png' % count), item_image)
-        if inv:
+        if inv is not None:
             inventory_slots[(x,y)] = (ITEM_TYPES.Amulet, item_level)
             return (ITEM_TYPES.Amulet, item_level)
     for count in range(1, ARMOR_TYPES+1):
         inv = locate_in_region(Image.open('Armor\Armor_%s.png' % count), item_image)
-        if inv:
+        if inv is not None:
             inventory_slots[(x, y)] = (ITEM_TYPES.Armor, item_level)
             return (ITEM_TYPES.Armor, item_level)
     for count in range(1, BOOT_TYPES+1):
         inv = locate_in_region(Image.open('Boots\Boot_%s.png' % count), item_image)
-        if inv:
+        if inv is not None:
             inventory_slots[(x, y)] = (ITEM_TYPES.Boot, item_level)
             return (ITEM_TYPES.Boot, item_level)
     for count in range(1, WEAPON_TYPES+1):
         inv = locate_in_region(Image.open('Weapons\Weapon_%s.png' % count), item_image)
-        if inv:
+        if inv is not None:
             inventory_slots[(x, y)] = (ITEM_TYPES.Weapon, item_level)
             return (ITEM_TYPES.Weapon, item_level)
     inventory_slots[(x, y)] = None
@@ -601,30 +606,38 @@ def main():
     global hwnd
     hwnd = find_hwnd()
     img = screenbitmap(regions.MAP_REGION, True)
-    region = pyautogui.locateOnScreen("sun.png") # How make sure it's not covered by mouse?
-    if region is None:
+    game_corner = pyautogui.locateOnScreen("Misc\sun.png") # How make sure it's not covered by mouse?
+    if game_corner is None:
         raise Exception('Could not find game on screen. Is the game visible?')
-    topLeftX = region[0]
-    topLeftY = region[1]
-    regions.GAME_REGION = (topLeftX, topLeftY, 1300, 750)
-    regions.HAND_REGION = (topLeftX+12, topLeftY + 648, 1000, 5)
-    regions.PAUSE_REGION = (topLeftX + 370, topLeftY - 5, 75, 75)
-    regions.BATTLE_REGION = (topLeftX + 480, topLeftY + 90, 90, 90)
-    regions.CURSOR_CORNER = (topLeftX + 1200, topLeftY + 700)
-    regions.BOARD_CORNER = (topLeftX - 2, topLeftY + 48)
-    regions.INVENTORYSLOT_REGION = (topLeftX+1066, topLeftY+277, 50, 5)
+    game_region = (game_corner[0], game_corner[1],0,0)
+    regions.HAND_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.HAND_REGION))
+    regions.PAUSE_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.PAUSE_REGION))
+    regions.BATTLE_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.BATTLE_REGION))
+    regions.INVENTORYSLOT_REGION = tuple(map(lambda  i, j: i+j, game_region, regions.INVENTORYSLOT_REGION))
+
+    regions.CURSOR_CORNER = tuple(map(lambda  i, j: i+j, game_region[:2], regions.CURSOR_CORNER))
+    regions.CURSOR_TRAIT = tuple(map(lambda i, j: i + j, game_region[:2], regions.CURSOR_TRAIT))
+    regions.BOARD_CORNER = tuple(map(lambda  i, j: i+j, game_region[:2], regions.BOARD_CORNER))
+    regions.CURSOR_LEVELUP = tuple(map(lambda i, j: i + j, game_region[:2], regions.CURSOR_LEVELUP))
+
+    regions.STAY_RETREAT_CORNER = tuple(map(lambda  i, j: i+j, game_region, regions.STAY_RETREAT_CORNER))
+    regions.MIDDLE_RETREAT = tuple(map(lambda  i, j: i+j, regions.STAY_RETREAT_CORNER, regions.MIDDLE_RETREAT))
+    regions.LEFT_RETREAT  = tuple(map(lambda  i, j: i+j, regions.STAY_RETREAT_CORNER, regions.LEFT_RETREAT))
+    regions.STAY = tuple(map(lambda  i, j: i+j, regions.STAY_RETREAT_CORNER, regions.STAY))
+
+    equipment_slots=([ITEM_TYPES.Weapon,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1082, 76)))],
+                     [ITEM_TYPES.Weapon,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1082, 186)))],
+                     [ITEM_TYPES.Armor,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1137, 186)))],
+                     [ITEM_TYPES.Boot,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1192, 186)))],
+                     [ITEM_TYPES.Amulet,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1137, 131)))])
+
     pyautogui.moveTo(regions.CURSOR_CORNER)
-    equipment_slots=([ITEM_TYPES.Weapon,0, (topLeftX+1082, topLeftY+76)],
-                     [ITEM_TYPES.Weapon,0, (topLeftX+1082, topLeftY+186)],
-                     [ITEM_TYPES.Armor,0, (topLeftX+1137, topLeftY+186)],
-                     [ITEM_TYPES.Boot,0, (topLeftX+1192, topLeftY+186)],
-                     [ITEM_TYPES.Amulet,0, (topLeftX+1137, topLeftY+131)])
     (mapGrid, success) = read_map(img)
     if not success:
         raise Exception("No river line found") # if no line can go left-right just give up on run.
     battled = True
     while (True):
-        if (pyautogui.locateOnScreen("Paused.png", region=regions.PAUSE_REGION)):
+        if (pyautogui.locateOnScreen("Misc\Paused.png", region=regions.PAUSE_REGION)):
             time.sleep(0.25)
             img = screenbitmap(regions.INVENTORY_REGION)
             if battled:
@@ -643,7 +656,7 @@ def main():
             equip_items(invslots,equipment_slots)
             rightclick(regions.CURSOR_CORNER)
 
-        if (pyautogui.locateOnScreen("Battle.png", region=regions.BATTLE_REGION)):
+        if (pyautogui.locateOnScreen("Misc\Battle.png", region=regions.BATTLE_REGION)):
             battled = True
         else:
             if battled:
