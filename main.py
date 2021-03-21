@@ -15,7 +15,7 @@ np.set_printoptions(linewidth=400)
 ###
 
 gridSize = 50
-offset_distance = 70
+offset_distance = -70
 cols = 21
 rows = 12
 hwnd = 0
