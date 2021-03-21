@@ -15,6 +15,7 @@ np.set_printoptions(linewidth=400)
 ###
 
 gridSize = 50
+offset_distance = 70
 cols = 21
 rows = 12
 hwnd = 0
@@ -49,13 +50,13 @@ class regions():
     BATTLE_REGION = (498,112,55,55)
     BOARD_CORNER = (0, 50)
     INVENTORYSLOT_REGION = (1068, 279,50,5)
-    LEVELUP_REGION = (964, 16, 8, 1)
+    LEVELUP_REGION = (964, 16, 4, 1)
     TEXTBOX_REGION = (703, 492, 1, 34)
 
 
     STAY_RETREAT_CORNER = (302, 250,0,0)
     MIDDLE_RETREAT = (212, 133, 1, 34)
-    LEFT_RETREAT = (103, 136, 1, 52)
+    LEFT_RETREAT = (103, 136, 1, 82)
     STAY_REGION = (316, 136, 1, 52)
     RESURRECT_REGION = (626, 388, 1, 34)
 
@@ -66,6 +67,7 @@ class regions():
     CURSOR_EXPEDITION = (1159, 62)
     CURSOR_START = (522, 673)
     CURSOR_REWARD = (484, 382)
+    CURSOR_LEFT_RETREAT = ()
     CURSOR_MIDDLE_RETREAT = (224, 155)
     CURSOR_RESURRECT = (331, 155)
 
@@ -139,7 +141,7 @@ def rightclick(region):
 
 # Wrapper for clicking middle of a rectangle
 def click_card(card):
-    click((card[0][0] + (card[0][2] / 2), card[0][1] + (card[0][3] / 2)))
+    click((card[0] + (card[2] / 2), card[1] + (card[3] / 2)))
 
 def screenbitmap(region, focus=False):
     if (focus):
@@ -395,13 +397,13 @@ def read_map(img):
     print_state(mapGrid)
     return (mapGrid, True)
 
-def play_card(card, mapgrid, target, replace):
+def play_card(card, mapgrid, target, replace, offset):
     try:
         x,y = find_grid(mapgrid, target)
     except IndexError:
         #print("Cannot place card")  # TODO: Figure out what to do here (update cardstoplay list?)
         return (mapgrid, False)
-    click_card(card)
+    click_card(tuple(map(lambda  i, j: i+j, card[0], offset)))
     click((regions.BOARD_CORNER[0] + 25 + (50 * x), regions.BOARD_CORNER[1] + 25 + (50 * y)))
     mapgrid[x][y] = replace
     pyautogui.moveTo(regions.CURSOR_CORNER)
@@ -555,19 +557,27 @@ def equip_items(itemslots, equipment_slots):
                     equipment_slots[4][1] = itemlevel
 
 def play_hand(mapgrid):
+    cur_offset = (0, 0, 0, 0)
+    added_offset = (offset_distance,0,0,0)
     cards = get_hand(regions.HAND_REGION)  # Can this run in a separate thread? : return list of new cards to play
     # Play cards if possible
     for card in reversed(cards):
         if card[1] == "Arsenal":
-            (mapgrid, success) = play_card(card, mapgrid, "2", "A")
+            (mapgrid, success) = play_card(card, mapgrid, "2", "A", cur_offset)
             if not success:
                 print("Failed to play Arsenal")
+            else:
+                if len(cards) >= 11:
+                    cur_offset = tuple(map(lambda  i, j: i+j, cur_offset, added_offset))
         elif card[1] == "Cemetery":
-            (mapgrid, success) = play_card(card, mapgrid, "1", "C")
+            (mapgrid, success) = play_card(card, mapgrid, "1", "C", cur_offset)
             if not success:
                 print("Failed to play Cemetery")
+            else:
+                if len(cards) >= 11:
+                    cur_offset = tuple(map(lambda  i, j: i+j, cur_offset, added_offset))
         elif card[1] == "Forest" or card[1] == "Thicket":
-            (mapgrid, success) = play_card(card, mapgrid, "0", "T")
+            (mapgrid, success) = play_card(card, mapgrid, "0", "T", cur_offset)
             if not success:
                 print("Failed to play Forest/Thicket")
             else:
@@ -577,33 +587,49 @@ def play_hand(mapgrid):
                     # Make sure it gets past the spawn animation
                     time.sleep(0.5)
                     mapgrid = find_woodtown(mapgrid, screenbitmap(regions.MAP_REGION))
+                if len(cards) >= 11:
+                    cur_offset = tuple(map(lambda  i, j: i+j, cur_offset, added_offset))
         elif card[1] == "Grove":
-            (mapgrid, success) = play_card(card, mapgrid, "1", "G")
+            (mapgrid, success) = play_card(card, mapgrid, "1", "G", cur_offset)
             if not success:
                 print("Failed to play Grove")
+            else:
+                if len(cards) >= 11:
+                    cur_offset = tuple(map(lambda  i, j: i+j, cur_offset, added_offset))
         elif card[1] == "Oblivion":
             # Delete bandits and woodtowns
-            (mapgrid, success) = play_card(card, mapgrid, "B", "2")
+            (mapgrid, success) = play_card(card, mapgrid, "B", "2", cur_offset)
             if success:
                 continue
             else:
-                (mapgrid, success) = play_card(card, mapgrid, "W", "1")
+                (mapgrid, success) = play_card(card, mapgrid, "W", "1", cur_offset)
+            if (success):
+                if len(cards) >= 11:
+                    cur_offset = tuple(map(lambda  i, j: i+j, cur_offset, added_offset))
         elif card[1] == "Outpost":
-            (mapgrid, success) = play_card(card, mapgrid, "2", "P")
+            (mapgrid, success) = play_card(card, mapgrid, "2", "P", cur_offset)
             if not success:
                 print("Failed to play Outpost")
+            else:
+                if len(cards) >= 11:
+                    cur_offset = tuple(map(lambda  i, j: i+j, cur_offset, added_offset))
         elif card[1] == "River":
-            (mapgrid, success) = play_card(card, mapgrid, "R", "S",)
+            (mapgrid, success) = play_card(card, mapgrid, "R", "S", cur_offset)
             if not success:
                 print("Failed to play River")
             else:
                 mapgrid = update_riverline(mapgrid)
+                if len(cards) >= 11:
+                    cur_offset = tuple(map(lambda  i, j: i+j, cur_offset, added_offset))
         elif card[1] == "Vampire":
-            (mapgrid, success) = play_card(card, mapgrid, "2", "V")
+            (mapgrid, success) = play_card(card, mapgrid, "2", "V", cur_offset)
             if not success:
                 print("Failed to play Vampire Mansion")
+            else:
+                if len(cards) >= 11:
+                    cur_offset = tuple(map(lambda  i, j: i+j, cur_offset, added_offset))
         elif card[1] == "Village":
-            (mapgrid, success) = play_card(card, mapgrid, "1", "v")
+            (mapgrid, success) = play_card(card, mapgrid, "1", "v", cur_offset)
             if not success:
                 print("Failed to play Village")
             else:
@@ -613,7 +639,9 @@ def play_hand(mapgrid):
                     # Make sure it gets past the spawn animation
                     time.sleep(0.5)
                     mapgrid = find_bandits(mapgrid, screenbitmap(regions.MAP_REGION))
-    return (mapgrid)
+                if len(cards) >= 11:
+                    cur_offset = tuple(map(lambda  i, j: i+j, cur_offset, added_offset))
+    return mapgrid
 
 def start_game():
     click(regions.CURSOR_EXPEDITION)
@@ -657,15 +685,14 @@ def main():
     regions.CURSOR_RESURRECT = tuple(map(lambda i, j: i + j, regions.STAY_RETREAT_CORNER, regions.CURSOR_RESURRECT))
     regions.CURSOR_MIDDLE_RETREAT = tuple(map(lambda i, j: i + j, regions.STAY_RETREAT_CORNER[:2], regions.CURSOR_MIDDLE_RETREAT))
 
-    equipment_slots=([ITEM_TYPES.Weapon,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1082, 76)))],
-                     [ITEM_TYPES.Weapon,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1082, 186)))],
-                     [ITEM_TYPES.Armor,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1137, 186)))],
-                     [ITEM_TYPES.Boot,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1192, 186)))],
-                     [ITEM_TYPES.Amulet,0, tuple(map(lambda  i, j: i+j, game_region[:2], (1137, 131)))])
-
     mapGrid = ()
     while (True):
         success = False
+        equipment_slots = ([ITEM_TYPES.Weapon, 0, tuple(map(lambda i, j: i + j, game_region[:2], (1082, 76)))],
+                           [ITEM_TYPES.Weapon, 0, tuple(map(lambda i, j: i + j, game_region[:2], (1082, 186)))],
+                           [ITEM_TYPES.Armor, 0, tuple(map(lambda i, j: i + j, game_region[:2], (1137, 186)))],
+                           [ITEM_TYPES.Boot, 0, tuple(map(lambda i, j: i + j, game_region[:2], (1192, 186)))],
+                           [ITEM_TYPES.Amulet, 0, tuple(map(lambda i, j: i + j, game_region[:2], (1137, 131)))])
         while (not success):
             start_game()
             img = screenbitmap(regions.MAP_REGION, True)
@@ -720,23 +747,25 @@ def main():
             boss = pyautogui.locateOnScreen("Misc\Stay.png", region=regions.STAY_REGION)
             if (boss):
                 click(boss)
-                time.sleep(1)
+                time.sleep(2)
                 #Textbox entry
-                for j in range(5):
+                for l in range(5):
                     click(regions.CURSOR_CORNER)
-                    time.sleep(0.5)
+                    time.sleep(1)
+                while (True):
+                    if (pyautogui.locateOnScreen("Misc\Battle.png", region=regions.BATTLE_REGION)):
+                        break
                 while (True):
                     if (pyautogui.locateOnScreen("Misc\Textbox.png", region=regions.TEXTBOX_REGION)):
                         #Textbox Outro
-                        time.sleep(1)
-                        for j in range(5):
+                        time.sleep(3)
+                        for l in range(5):
                             click(regions.CURSOR_CORNER)
-                            time.sleep(0.5)
+                            time.sleep(1)
                         time.sleep(1)
                         click(regions.CURSOR_REWARD)
                         time.sleep(0.5)
-                        ret = pyautogui.locateOnScreen("Misc\Left_Retreat.png", region=regions.LEFT_RETREAT)
-                        click(ret)
+                        click(pyautogui.locateOnScreen("Misc\Left_Retreat.png", region=regions.LEFT_RETREAT))
                         time.sleep(2)
                         game_running = False
                         break
